@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scopus analysis</title>
+
+    <link rel="stylesheet" href="scopus.css">
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/jszip.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/xlsx.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.13.1/xlsx.full.min.js"></script>  
+
+    <script type="text/javascript" src="scopus.js" defer></script>
+</head>
+
+<body>
+	<div id="configuration">
+    <h1>Infection plots: Understanding the h-index through self-citation visualizations </h1>
+    <p>This tool is designed to generate interactive infection plots.</p>
+    <p>Infection plots are proposed as a method for understanding self-citations and their impact on the h-index. 
+        In addition the tool produces a number of useful descriptive statistics and summaries.</p> 
+    <p>As input you the tool require a spreadsheet containing complete Scopus records for a given author.</p>    
+ 
+        <ul>
+            <li>
+                <label for="file-selector"><span>File</span></label>
+                <input type="file" id="file-selector" accept=".xlsx, .xls, .csv, .json" >
+            </li>
+        </ul>				
+        <input id="anonymize" type="checkbox">Anonymize the visualizations by scrambling text.<br>
+        <input id="frequentReferences" type="checkbox">Include frequent references (longer processing delay).<br>
+        <input id="excelDump" type="checkbox">Export self-citation data to spreadsheet for manual analysis.<br>
+
+        <h1>Preparing Scopus author records</h1>
+        <p>To retrieve Scopus records you need to have access to Scopus via your institution. If you are on your institutional netowrk you can use the following:</p>
+        <ol>
+        <li>Use the scopus author <a href="https://www.scopus.com/search/form.uri?display=basic#author">search interface</a></li>
+        <li> records via name
+        <form action="https://www.scopus.com/results/authorNamesList.uri">
+            Surname <input type="text" name="st1"> <br>
+            First name <input type="text" name="st2"><br>
+            <input type="hidden" name="name" value="name">
+            <input type="hidden" name="origin" value="searchauthorlookup">
+            <input type="submit">
+        </form>
+        </li>
+        <li>Lookup records via scopus author ID
+        <form action="https://www.scopus.com/authid/detail.uri">
+            Scopus author id: <input type="text" name="authorId"><br>
+            <input type="submit">
+        </form>
+        </li>
+        </ol>
+    </div>		
+
+    <div id="processing" style="display: none;"><h1>Processing file... please wait...</h1></div>
+
+    <div id="result" style="display: none;">
+        <h1>Author: <span id="mainAuthor" title="This author is the most frequently occuring"></span></h1>
+        <h2>Key statistics</h2>
+        <ul>
+            <li>Academic age: <span class="emphasize" title="Assuming a typical academic year is 40 years."><span id="academicAge"></span> years</span>,
+             (remaining career: <span class="emphasize" title="Assuming a typical academic year is 40 years."><span id="remainingCareer"></span> years</span>)</li>
+            
+            <li>Total publications: <span class="emphasize" title="Counting every record in the file regardless of document type."><span id="noPublications"></span></span></li>
+            <li>Most recent publications: <span class="emphasize" title="This is the year of the most recent publication. An active researcher publishes regularly and typically have recent publications."><span id="mostRecentPublication"></span></span> (<span class="emphasize" title="Number of years since the most recent publication came out. An active researcher publishes regularly and typically have recent publications."><span id="ageMostRecentPublication"></span></span> years ago).</li>
+            <li>Open access: <span class="emphasize" title="The percentage of publications that are open access. Note that there are different categories of open access."><span id="percentageOpenAccess"></span>%</span></li>
+            <li><span id="mostFrequentDocType"></span>: <span class="emphasize" title="The percentage of the most common publication type. Typically journals have the hightest status, followed by conference proceedings, etc."><span id="mostFrequentDocTypeVal"></span>%</span>, 
+            <span id="secondMostFrequentDocType"></span>: <span class="emphasize" title="The percentage of the second most common publication type. Typically journals have the hightest status, followed by conference proceedings, etc."><span id="secondMostFrequentDocTypeVal"></span>%</span>,
+            other (editorials, letters, etc): <span class="emphasize" title="Percentage of other publication types, possibly less prestigious."><span id="noOthers"></span>%</span></li>
+            <li>Collaborators: <span class="emphasize" title="Total number of authors counted across all the publications."><span id="totalCollaborators"></span></span></li>
+        </ul>
+        
+        <h2>Citation statistics</h2>
+        <ul>
+            <li>Citations: <span class="emphasize"><span id="numberCitations" title="All citations counted for the publications."></span></span></li>
+            <li>Self-citations: <span class="emphasize"><span id="percentSelfCitations" title="The percentage of self-citations. A self-citation typically is used to position the researchers own work and should not count towards impact. Citations by others are often used as a proxy for impact."></span>%</span></li>
+            <li>Un-cited publications (noise): <span class="emphasize" title="Percentage of publications that other researchers have not shown much interest in yet."><span id="uncitedPublications"></span>%</span></li>
+            <li>H-index: <span class="emphasize" title="The classic Hirsh index based on all the citations"><span id="hIndex"></span></span>,
+            corrected H-index: <span class="emphasize" title="Hirch index when self-citations are excluded."><span id="correctedHIndex"></span></span> (without self-citation)</li>
+            <li>H-index manipulation: <span class="emphasize" title="Percentage of citations that are self-citations and crucial for the current h-index. A high value could indicate systematic manipulation of own h-index."><span id="hIndexManipulation"></span>%</span></li>            
+            <li>s-index: <span class="emphasize"><span id="sIndex" title="S-index is similar to h-index but solely based on self-citations."></span></span></li>
+            <li>g-index: <span class="emphasize"><span id="gIndex" title="g-index give more weigth to publications with many citations."></span></span></li>
+            <li>ha-index: <span class="emphasize"><span id="haIndex" title="ha-index is based on average citations per year."></span></span></li>
+            <li>individualised h-index: <span class="emphasize"><span id="hIndexIndividual" title="Individualized h-index is is based on citations divided by the number of authors in each publication."></span></span></li>
+            <li>Humpbacks detected: <span class="emphasize" title="Humpbacks are points of irregularities that could be caused by citation manipulations, by oneself, co-authors, or others."><span id="noHumpbacks"></span></span> (see details in publication list below)</li>            
+            <li>Pub-channel diversity: <span class="emphasize" title="Publication channel diversity: less than 0.5 => similar channels, larger than 0.5 => only unique channels."><span id="channelDiversity"></span></span></li>            
+        </ul>
+
+        <h2>Author role</h2>
+        <ul>
+            <li>Solo author (independent): <span class="emphasize" title="There is not doubt who contributed in a publication with single authors."><span id="soloAuthor"></span>%</span></li>
+            <li>First author (learning, primus motor): <span class="emphasize" title="First authors typically do most of the work on a publication. Research students are typically first authors of their own publications."><span id="firstAuthor"></span>%</span></li>
+            <li>Middle author (free-rider): <span class="emphasize" title="A middle author contributes less, and in some instances insignificantly or even nothing."><span id="middleAuthor"></span>%</span></li>
+            <li>Last author (supervisor, leader): <span class="emphasize" title="In some research cultures a supervisor or project leader will be positioned last in the list."><span id="lastAuthor"></span>%</span></li>
+        </ul>
+
+        <h2>Reference stats</h2>
+        <ul>
+            <li>Median reference age: <span class="emphasize" title="Low values suggest recent references and timely research. High values could suggest outdated research."><span id="medianReferenceAge"></span></span> (timeliness of work)</li>
+            <li>Median number of references: <span class="emphasize" title="Low values suggest that the work is not well-founded in an existing research discourse."><span id="medianNoReferences"></span></span> (connected to research discourse)</li>
+            <li id="refStat1">Most frequent reference reuse: <span class="emphasize" title="High values suggest the author keep reusing one reference many times (not exploring new research)."><span id="mostFrequentReuse"></span></span> (not including self-citations)</li>
+            <li id="refStat2">Number of reused references: <span class="emphasize" title="High values suggest the author reuses many references in different publications (not exploring new research)."><span id="noReusedReferences"></span></span> (not including self-citations)</li>
+            <li id="refStat3">Reference reuse index (h-index): <span class="emphasize" title="A high values suggest the author reuses many of the same references (not exploring new research)."><span id="reuseIndex"></span></span> (not including self-citations)</li>
+        </ul>
+
+        <h2>h-index growth prognosis</h2>
+        <p>Use the slider to get different h-index growth prognoses. Publications that are most likely to grow the h-index are highlighted in green, annotated with the number of additional citations needed (see below).</p>
+        <input type="range" min="1" max="100" value="50" id="hIndexPrognosis"> Target h-index: <span id="hIndexPrognosisLabel" class="emphasize">0</span>
+
+        <h2>Annotated publication list</h2>
+        <p>The publications are ordered on decreasing citations. Blue bars indicate citations counting towards the h-index, while red bars indicate self-citations counting towards the h-index. Green bars show other citations, while orange shows self-citations (not counting towards the h-index). Click on the publication for the publication landing page.</p>
+        <div id="insertionPointReport" class="pubContainer">
+        </div>
+
+        <h2>Self-citation time profile</h2>
+        <div id="insertionTimeline" class="timelineContainer">
+        </div>
+        <br>
+        <br>
+
+        <h2>Recurring authors</h2>
+        <ol>
+            <div id="recurringAuthorList"></div>
+        </ol>
+
+        <h2>Recurring publication channels</h2>
+        <ol>
+            <div id="recurringChannelList"></div>
+        </ol>
+
+
+        <h2>Recurring publishers</h2>
+        <ol>
+            <div id="publisherList"></div>
+        </ol>
+
+        <h2>Recurring topics</h2>
+        <ol>
+            <div id="recurringTopicList"></div>
+        </ol>
+
+        <h2>Fan of: (peers frequently cited by the author)</h2>
+        <ol>
+            <div id="citingAuthorsList"></div>
+        </ol>
+
+        <h2 id="refStat4">Frequently reused references (not including self-citationss)</h2>
+        <ol>
+            <div id="reusedReferenceList"></div>
+        </ol>
+    </div>
+
+    <template id="publication">
+        <div id="pubAnnotation" class="annotation">Humpback</div>
+        <div id="pubNumber">1</div>
+        <div id="pubDetails" class="pubItem">Huang Y.-P.; Chang T.-W.; Chen Y.-R.; Sa (2008) A back propagation based real-time license plate recognition. INTERNATIONAL JOURNA</div>
+        <div id="citationInfo" class="pubItem"><span id="noCitations">23</span> cites</div>
+    </template>
+
+    <template id="barGraphTemplate">
+        <div id="barGraph">
+            <div id="hIndexOtherBar" class="bar"></div>
+            <div id="hIndexSelfBar" class="bar"></div>
+            <div id="otherCitationsBar" class="bar"></div>
+            <div id="selfCitationsBar" class="bar"></div>
+        </div>
+    </template>
+
+    <template id="frequencyListTemplate">
+        <li id="entry">
+            <span id="item"></span> (<span id="frequency" class="annotation"></span>)
+        </li>
+    </template>
+
+<template id="formattedPublicationTemplate">
+    <a id="formattedRef">
+        <span id="authors"></span> (<span id="year"></span>) <span id="title"></span>. <span id="source"></span>
+    </a>
+</template>
+
+<template id="timelineBarTemplate">
+    <div id="timelineBarInstance" class="timelineBar"><span id="label"></div>
+</template>
+
+</body>
+</html>
